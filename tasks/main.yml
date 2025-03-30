@@ -1,0 +1,152 @@
+---
+- name: Ensure ca_fingerprint is present
+  assert:
+    that:
+      - ca_fingerprint is not none
+    fail_msg: "You must provide value for ca_fingerprint"
+    quiet: true
+
+- name: Install nebula
+  ansible.builtin.package:
+    name: nebula
+    state: present
+
+- name: Generate Nebula key pair
+  command: nebula-cert keygen -out-key {{ inventory_hostname }}.key -out-pub {{ inventory_hostname }}.pub
+  args:
+    chdir: "{{ config_prefix }}"
+    creates: "{{ inventory_hostname }}.pub"
+
+- name: Copy public key of a remote host to sign locally
+  fetch:
+    flat: true
+    src: "{{ config_prefix }}/{{ inventory_hostname }}.pub"
+    dest: "{{ pub_dir }}/{{ inventory_hostname }}.pub"
+
+- name: Check cert exists on remote host
+  stat:
+    path: "{{ config_prefix }}/{{ inventory_hostname }}.crt"
+  register: cert_present
+
+- name: Fetch cert properties from remote host
+  when: cert_present.stat.exists
+  command:
+    cmd: 'nebula-cert print -path "{{ config_prefix }}/{{ inventory_hostname }}.crt" -json'
+  failed_when: cert_properties.stderr | length > 0 or cert_properties.rc != 0
+  check_mode: false
+  changed_when: false
+  register: cert_properties
+
+- name: Compare groups, name, address; check cert expiration
+  when: cert_present.stat.exists
+  set_fact:
+    comparison:
+      - property: name
+        should_reissue: "{{ details.name != inventory_hostname }}"
+        name_cert: "{{ details.name }}"
+        name_conf: "{{ inventory_hostname }}"
+
+      - property: groups
+        should_reissue: "{{ groups_cert != nebula_groups }}"
+        groups_cert: "{{ groups_cert }}"
+        groups_conf: "{{ nebula_groups }}"
+
+      - property: ips
+        should_reissue: "{{ ips_cert != nebula_addr }}"
+        ips_cert: "{{ ips_cert }}"
+        ips_conf: "{{ nebula_addr }}"
+
+      - property: ca
+        should_reissue: "{{ ca_cert != ca_fingerprint }}"
+        ca_cert: "{{ ca_cert }}"
+        ca_conf: "{{ ca_fingerprint }}"
+
+      - property: expiration
+        should_reissue: "{{ days_left | int < days_left_threshold | int }}"
+        days_left: "{{ days_left }}"
+
+  vars:
+    details: "{{ (cert_properties.stdout | from_json).details }}"
+    groups_cert: "{{ details.groups | join(',') }}"
+    ips_cert: "{{ details.ips | join(',') }}"
+    ca_cert: "{{ cert_present.stat.exists and (cert_properties.stdout | from_json).details.issuer }}"
+    days_left: "{{ ((cert_properties.stdout | from_json).details.notAfter | to_datetime('%Y-%m-%dT%H:%M:%S%z') - now_ts | to_datetime('%Y-%m-%dT%H:%M:%S%z')).days }}"
+
+- name: Set do_reissue
+  when: cert_present.stat.exists
+  set_fact:
+    do_reissue: "{{ comparison | map(attribute='should_reissue') | select('equalto', true) | list | length > 0 }}"
+
+- name: Log reason for certificate reissuance
+  when: do_reissue
+  debug:
+    var: comparison | selectattr('should_reissue')
+
+- name: Issue certificate
+  when: not cert_present.stat.exists or do_reissue
+  delegate_to: localhost
+  shell: >
+    nebula-cert sign \
+      -ca-crt {{ ca_crt | quote }} \
+      -ca-key {{ ca_key | quote }} \
+      {% if duration %}
+        -duration {{ duration | quote }} \
+      {% endif %}
+      -in-pub "{{ pub_dir }}/{{ inventory_hostname }}.pub" \
+      -name {{ inventory_hostname | quote }} \
+      -ip {{ nebula_addr | quote }} \
+      {% if nebula_groups %}
+        --groups {{ nebula_groups | quote }} \
+      {% endif %}
+      -out-crt {{ inventory_hostname | quote }}.crt
+
+- name: Log new cert data
+  when: not cert_present.stat.exists or do_reissue
+  delegate_to: localhost
+  shell: >
+    nebula-cert print -path {{ inventory_hostname | quote }}.crt -json >> {{ ct_log_file | quote }}
+
+- name: Copy issued certificate
+  notify: nebula_reload
+  when: not cert_present.stat.exists or do_reissue
+  copy:
+    src: "{{ inventory_hostname }}.crt"
+    dest: "{{ config_prefix }}/{{ inventory_hostname }}.crt"
+
+- name: Delete issued certificate from management node
+  delegate_to: localhost
+  when: not cert_present.stat.exists or do_reissue
+  file:
+    path: "{{ inventory_hostname }}.crt"
+    state: absent
+
+- name: Generate Nebula ssh host key
+  shell: >
+    ssh-keygen -t ed25519 -f ssh_host_ed25519_key -N "" < /dev/null
+  args:
+    chdir: "{{ config_prefix }}"
+    creates: ssh_host_ed25519_key
+
+- name: Copy nebula config
+  notify: nebula_reload
+  copy:
+    src: "{{ configs_dir }}/{{ inventory_hostname }}.yaml"
+    dest: "{{ config_prefix }}/config.yml"
+
+- name: Verify configuration
+  command: "nebula -test -config {{ config_prefix }}/config.yml"
+  changed_when: false
+
+- name: Enable nebula service (systemd)
+  when: service_manager == "systemd"
+  systemd_service:
+    name: "{{ nebula_service_name }}"
+    enabled: true
+    state: started
+
+- name: Enable nebula service (runit)
+  when: service_manager == "runit"
+  file:
+    src: /etc/sv/nebula
+    dest: /var/service/nebula
+    state: link

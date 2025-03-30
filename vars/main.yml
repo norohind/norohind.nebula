@@ -1,0 +1,4 @@
+---
+now_ts: "{{ ('%Y-%m-%dT%H:%M:%S%z' | strftime) }}"
+do_reissue: false
+ca_mismatch: false
