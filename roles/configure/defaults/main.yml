@@ -1,5 +1,12 @@
 ---
 # defaults file for nebula
+nebula_version: v1.9.5
+nebula_arch: amd64
+nebula_download_url: https://github.com/slackhq/nebula/releases/download/{{ nebula_version }}/nebula-linux-{{ nebula_arch }}.tar.gz
+
+nebula_download_dir: /opt
+nebula_bin_dir: /usr/local/bin
+
 ca_fingerprint:
 days_left_threshold: 30
 config_prefix: /etc/nebula
@@ -7,8 +14,11 @@ ca_crt: ca.crt
 ca_key: ca.key
 ct_log_file: ct.log
 
-nebula_service_name: nebula
-service_manager: systemd  # Supports systemd and runit
+nebula_service_name_default: nebula
+
+service_name_mapping:
+  - Debian: "nebula@config"
+
 duration:
 nebula_groups:
 

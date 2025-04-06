@@ -6,10 +6,24 @@
     fail_msg: "You must provide value for ca_fingerprint"
     quiet: true
 
+- name: Correct nebula_addr
+  when: not nebula_addr is search("/")
+  set_fact:
+    nebula_addr: "{{ nebula_addr + '/' + nebula_subnet }}"
+
+- name: Set nebula service name
+  set_fact:
+    nebula_service_name: "{{ service_name_mapping[ansible_distribution] | default(nebula_service_name_default) }}"
+
 - name: Install nebula
+  when: ansible_distribution != "Ubuntu"
   ansible.builtin.package:
     name: nebula
     state: present
+
+- name: Install nebula from GitHub
+  when: ansible_distribution == "Ubuntu"
+  ansible.builtin.import_tasks: download-nebula.yaml
 
 - name: Generate Nebula key pair
   command: nebula-cert keygen -out-key {{ inventory_hostname }}.key -out-pub {{ inventory_hostname }}.pub
@@ -138,14 +152,14 @@
   changed_when: false
 
 - name: Enable nebula service (systemd)
-  when: service_manager == "systemd"
+  when: ansible_distribution != "Void"
   systemd_service:
     name: "{{ nebula_service_name }}"
     enabled: true
     state: started
 
 - name: Enable nebula service (runit)
-  when: service_manager == "runit"
+  when: ansible_distribution == "Void"
   file:
     src: /etc/sv/nebula
     dest: /var/service/nebula

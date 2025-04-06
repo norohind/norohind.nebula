@@ -1,14 +1,14 @@
 ---
 # handlers file for nebula
 - name: Reload nebula config (systemd)
-  when: service_manager == "systemd"
+  when: ansible_distribution != "Void"
   listen: nebula_reload
   service:
     name: "{{ nebula_service_name }}"
     state: reloaded
 
 - name: Reload nebula config (runit)
-  when: service_manager == "runit"
+  when: ansible_distribution == "Void"
   listen: nebula_reload
   community.general.runit:
     name: "{{ nebula_service_name }}"

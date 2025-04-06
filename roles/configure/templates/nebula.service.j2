@@ -1,0 +1,13 @@
+[Unit]
+Description={{ nebula_service_name }}
+Wants=basic.target
+After=basic.target network.target
+
+[Service]
+SyslogIdentifier={{ nebula_service_name }}
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStart={{ nebula_bin_dir }}/nebula -config {{ config_prefix }}/config.yml
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
