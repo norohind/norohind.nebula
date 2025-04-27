@@ -8,6 +8,8 @@
 
 - name: Correct nebula_addr
   when: not nebula_addr is search("/")
+  tags:
+    - sign
   set_fact:
     nebula_addr: "{{ nebula_addr + '/' + nebula_subnet }}"
 
@@ -16,6 +18,17 @@
     - installation
   set_fact:
     nebula_service_name: "{{ service_name_mapping[ansible_distribution] | default(nebula_service_name_default) }}"
+
+- name: Create nebula config directory
+  tags:
+    - sign
+    - installation
+    - config
+
+  ansible.builtin.file:
+    path: "{{ config_prefix }}"
+    state: directory
+    mode: "0755"
 
 - name: Install nebula
   when: ansible_distribution != "Ubuntu"
@@ -32,24 +45,32 @@
   ansible.builtin.import_tasks: download-nebula.yaml
 
 - name: Generate Nebula key pair
+  tags:
+    - sign
   command: nebula-cert keygen -out-key {{ inventory_hostname }}.key -out-pub {{ inventory_hostname }}.pub
   args:
     chdir: "{{ config_prefix }}"
     creates: "{{ inventory_hostname }}.pub"
 
 - name: Copy public key of a remote host to sign locally
+  tags:
+    - sign
   fetch:
     flat: true
     src: "{{ config_prefix }}/{{ inventory_hostname }}.pub"
     dest: "{{ pub_dir }}/{{ inventory_hostname }}.pub"
 
 - name: Check cert exists on remote host
+  tags:
+    - sign
   stat:
     path: "{{ config_prefix }}/{{ inventory_hostname }}.crt"
   register: cert_present
 
 - name: Fetch cert properties from remote host
   when: cert_present.stat.exists
+  tags:
+    - sign
   command:
     cmd: 'nebula-cert print -path "{{ config_prefix }}/{{ inventory_hostname }}.crt" -json'
   failed_when: cert_properties.stderr | length > 0 or cert_properties.rc != 0
@@ -59,6 +80,8 @@
 
 - name: Compare groups, name, address; check cert expiration
   when: cert_present.stat.exists
+  tags:
+    - sign
   set_fact:
     comparison:
       - property: name
@@ -94,16 +117,22 @@
 
 - name: Set do_reissue
   when: cert_present.stat.exists
+  tags:
+    - sign
   set_fact:
     do_reissue: "{{ comparison | map(attribute='should_reissue') | select('equalto', true) | list | length > 0 }}"
 
 - name: Log reason for certificate reissuance
   when: do_reissue
+  tags:
+    - sign
   debug:
     var: comparison | selectattr('should_reissue')
 
 - name: Issue certificate
   when: not cert_present.stat.exists or do_reissue
+  tags:
+    - sign
   delegate_to: localhost
   shell: >
     nebula-cert sign \
@@ -122,6 +151,8 @@
 
 - name: Log new cert data
   when: not cert_present.stat.exists or do_reissue
+  tags:
+    - sign
   delegate_to: localhost
   shell: >
     nebula-cert print -path {{ inventory_hostname | quote }}.crt -json >> {{ ct_log_file | quote }}
@@ -129,6 +160,8 @@
 - name: Copy issued certificate
   notify: nebula_reload
   when: not cert_present.stat.exists or do_reissue
+  tags:
+    - sign
   copy:
     src: "{{ inventory_hostname }}.crt"
     dest: "{{ config_prefix }}/{{ inventory_hostname }}.crt"
@@ -136,6 +169,8 @@
 - name: Delete issued certificate from management node
   delegate_to: localhost
   when: not cert_present.stat.exists or do_reissue
+  tags:
+    - sign
   file:
     path: "{{ inventory_hostname }}.crt"
     state: absent
@@ -143,11 +178,15 @@
 - name: Generate Nebula ssh host key
   shell: >
     ssh-keygen -t ed25519 -f ssh_host_ed25519_key -N "" < /dev/null
+  tags:
+    - debug-ssh
   args:
     chdir: "{{ config_prefix }}"
     creates: ssh_host_ed25519_key
 
 - name: Copy nebula config
+  tags:
+    - config
   notify: nebula_reload
   copy:
     src: "{{ configs_dir }}/{{ inventory_hostname }}.yaml"
@@ -155,6 +194,8 @@
 
 - name: Verify configuration
   command: "nebula -test -config {{ config_prefix }}/config.yml"
+  tags:
+    - config
   changed_when: false
 
 - name: Enable nebula service (systemd)
