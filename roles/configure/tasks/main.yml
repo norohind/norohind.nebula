@@ -12,17 +12,23 @@
     nebula_addr: "{{ nebula_addr + '/' + nebula_subnet }}"
 
 - name: Set nebula service name
+  tags:
+    - installation
   set_fact:
     nebula_service_name: "{{ service_name_mapping[ansible_distribution] | default(nebula_service_name_default) }}"
 
 - name: Install nebula
   when: ansible_distribution != "Ubuntu"
+  tags:
+    - installation
   ansible.builtin.package:
     name: nebula
     state: present
 
 - name: Install nebula from GitHub
   when: ansible_distribution == "Ubuntu"
+  tags:
+    - installation
   ansible.builtin.import_tasks: download-nebula.yaml
 
 - name: Generate Nebula key pair
@@ -153,6 +159,8 @@
 
 - name: Enable nebula service (systemd)
   when: ansible_distribution != "Void"
+  tags:
+    - installation
   systemd_service:
     name: "{{ nebula_service_name }}"
     enabled: true
@@ -160,6 +168,8 @@
 
 - name: Enable nebula service (runit)
   when: ansible_distribution == "Void"
+  tags:
+    - installation
   file:
     src: /etc/sv/nebula
     dest: /var/service/nebula
