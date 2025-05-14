@@ -19,6 +19,8 @@ nebula_service_name_default: nebula
 service_name_mapping:
   - Debian: "nebula@config"
 
+force_download: false
+
 duration:
 nebula_groups:
 

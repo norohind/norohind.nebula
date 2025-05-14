@@ -14,10 +14,18 @@
     nebula_addr: "{{ nebula_addr + '/' + nebula_subnet }}"
 
 - name: Set nebula service name
+  when: not force_download
   tags:
     - installation
   set_fact:
     nebula_service_name: "{{ service_name_mapping[ansible_distribution] | default(nebula_service_name_default) }}"
+
+- name: Set nebula service name
+  when: force_download
+  tags:
+    - installation
+  set_fact:
+    nebula_service_name: "{{ nebula_service_name_default }}"
 
 - name: Create nebula config directory
   tags:
@@ -31,7 +39,7 @@
     mode: "0755"
 
 - name: Install nebula
-  when: ansible_distribution != "Ubuntu"
+  when: ansible_distribution != "Ubuntu" and not force_download
   tags:
     - installation
   ansible.builtin.package:
@@ -39,7 +47,7 @@
     state: present
 
 - name: Install nebula from GitHub
-  when: ansible_distribution == "Ubuntu"
+  when: ansible_distribution == "Ubuntu" or force_download
   tags:
     - installation
   ansible.builtin.import_tasks: download-nebula.yaml
