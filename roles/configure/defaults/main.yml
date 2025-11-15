@@ -26,3 +26,5 @@ nebula_groups:
 
 pub_dir: pubkeys
 configs_dir: configs
+
+reload_state: reloaded

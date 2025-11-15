@@ -5,11 +5,11 @@
   listen: nebula_reload
   service:
     name: "{{ nebula_service_name }}"
-    state: reloaded
+    state: "{{ reload_state }}"
 
 - name: Reload nebula config (runit)
   when: ansible_distribution == "Void"
   listen: nebula_reload
   community.general.runit:
     name: "{{ nebula_service_name }}"
-    state: reloaded
+    state: "{{ reload_state }}"

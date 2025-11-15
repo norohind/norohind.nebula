@@ -137,6 +137,13 @@
   debug:
     var: comparison | selectattr('should_reissue')
 
+- name: Set reload_state when IP range change triggers reissue
+  when:
+    - cert_present.stat.exists
+    - comparison | selectattr('property', 'equalto', 'ips') | selectattr('should_reissue', 'equalto', true) | list | length > 0
+  set_fact:
+    reload_state: restarted
+
 - name: Issue certificate
   when: not cert_present.stat.exists or do_reissue
   tags:
