@@ -7,6 +7,8 @@ nebula_download_url: https://github.com/slackhq/nebula/releases/download/{{ nebu
 nebula_download_dir: /opt
 nebula_bin_dir: /usr/local/bin
 
+nebula_download_path: {{ nebula_download_dir }}/nebula-linux-{{ nebula_arch }}-{{ nebula_version }}.tar.gz
+
 ca_fingerprint:
 days_left_threshold: 30
 config_prefix: /etc/nebula
@@ -18,6 +20,7 @@ nebula_service_name_default: nebula
 
 service_name_mapping:
   Debian: "nebula@config"
+  Ubuntu: "nebula"
 
 force_download: false
 

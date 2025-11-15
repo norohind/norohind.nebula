@@ -2,14 +2,23 @@
 - name: Download nebula
   ansible.builtin.get_url:
     url: "{{ nebula_download_url }}"
-    dest: "{{ nebula_download_dir }}/nebula.tar.gz"
+    dest: "{{ nebula_download_path }}"
     mode: "0644"
+    group: root
+    owner: root
 
 - name: Unarchive nebula
   ansible.builtin.unarchive:
-    src: "{{ nebula_download_dir }}/nebula.tar.gz"
+    src: "{{ nebula_download_path }}"
     dest: "{{ nebula_bin_dir }}"
     remote_src: true
+    group: root
+    owner: root
+
+- name: Remove downloaded nebula tar.gz
+  ansible.builtin.file:
+    path: "{{ nebula_download_path }}"
+    state: absent
 
 - name: Template nebula systemd unit
   ansible.builtin.template:

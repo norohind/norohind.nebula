@@ -8,22 +8,16 @@
 
 - name: Correct nebula_addr
   when: not nebula_addr is search("/")
-  tags:
-    - sign
   set_fact:
     nebula_addr: "{{ nebula_addr + '/' + nebula_subnet }}"
 
 - name: Set nebula service name
   when: not force_download
-  tags:
-    - installation
   set_fact:
     nebula_service_name: "{{ service_name_mapping[ansible_distribution] | default(nebula_service_name_default) }}"
 
 - name: Set nebula service name
   when: force_download
-  tags:
-    - installation
   set_fact:
     nebula_service_name: "{{ nebula_service_name_default }}"
 
@@ -39,7 +33,7 @@
     mode: "0755"
 
 - name: Install nebula
-  when: ansible_distribution != "Ubuntu" and not force_download
+  when: not force_download
   tags:
     - installation
   ansible.builtin.package:
@@ -47,7 +41,7 @@
     state: present
 
 - name: Install nebula from GitHub
-  when: ansible_distribution == "Ubuntu" or force_download
+  when: force_download
   tags:
     - installation
   ansible.builtin.import_tasks: download-nebula.yaml
@@ -138,6 +132,8 @@
     var: comparison | selectattr('should_reissue')
 
 - name: Set reload_state when IP range change triggers reissue
+  tags:
+    - sign
   when:
     - cert_present.stat.exists
     - comparison | selectattr('property', 'equalto', 'ips') | selectattr('should_reissue', 'equalto', true) | list | length > 0
