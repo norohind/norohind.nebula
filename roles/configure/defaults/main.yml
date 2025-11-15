@@ -17,7 +17,7 @@ ct_log_file: ct.log
 nebula_service_name_default: nebula
 
 service_name_mapping:
-  - Debian: "nebula@config"
+  Debian: "nebula@config"
 
 force_download: false
 
