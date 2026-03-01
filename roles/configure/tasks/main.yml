@@ -111,11 +111,12 @@
         days_left: "{{ days_left }}"
 
   vars:
-    details: "{{ (cert_properties.stdout | from_json).details }}"
+    parsed_cert: "{{ cert_properties.stdout | from_json }}"
+    details: "{{ (parsed_cert if parsed_cert is mapping else parsed_cert | first).details }}"
     groups_cert: "{{ details.groups | join(',') }}"
-    ips_cert: "{{ details.ips | join(',') }}"
-    ca_cert: "{{ cert_present.stat.exists and (cert_properties.stdout | from_json).details.issuer }}"
-    days_left: "{{ ((cert_properties.stdout | from_json).details.notAfter | to_datetime('%Y-%m-%dT%H:%M:%S%z') - now_ts | to_datetime('%Y-%m-%dT%H:%M:%S%z')).days }}"
+    ips_cert: "{{ (details.networks | default(details.ips)) | join(',') }}"
+    ca_cert: "{{ cert_present.stat.exists and details.issuer }}"
+    days_left: "{{ (details.notAfter | to_datetime('%Y-%m-%dT%H:%M:%S%z') - now_ts | to_datetime('%Y-%m-%dT%H:%M:%S%z')).days }}"
 
 - name: Set do_reissue
   when: cert_present.stat.exists
@@ -157,6 +158,9 @@
       -ip {{ nebula_addr | quote }} \
       {% if nebula_groups %}
         --groups {{ nebula_groups | quote }} \
+      {% endif %}
+      {% if nebula_subnets %}
+        -subnets {{ nebula_subnets | quote }} \
       {% endif %}
       -out-crt {{ inventory_hostname | quote }}.crt
 
